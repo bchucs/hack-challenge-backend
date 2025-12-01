@@ -48,8 +48,6 @@ class Outlet(db.Model):
     url = db.Column(db.String(512))
     description = db.Column(db.Text)
     logo_url = db.Column(db.String(512))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     articles = db.relationship('Article', backref='outlet', lazy=True)
 
@@ -62,8 +60,6 @@ class Outlet(db.Model):
             "url": self.url,
             "description": self.description,
             "logo_url": self.logo_url,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 class Article(db.Model):
@@ -74,9 +70,7 @@ class Article(db.Model):
     link = db.Column(db.String(512), nullable=False)
     description = db.Column(db.Text)
     author = db.Column(db.String(256))
-    categories = db.Column(db.String(512))
     pub_date = db.Column(db.DateTime)
-    image_url = db.Column(db.String(512))
     outlet_id = db.Column(db.Integer, db.ForeignKey('outlet.id'), nullable=False)
 
     def to_dict(self):
@@ -87,9 +81,7 @@ class Article(db.Model):
             "link": self.link,
             "description": self.description,
             "author": self.author,
-            "categories": self.categories.split(",") if self.categories else [],
             "pub_date": self.pub_date.isoformat() if self.pub_date else None,
-            "image_url": self.image_url,
             "outlet": {
                 "id": self.outlet.id,
                 "name": self.outlet.name,
@@ -114,19 +106,12 @@ def fetch_and_store_feeds():
                     if Article.query.filter_by(guid=guid).first():
                         continue
 
-                    categories = None
-                    try:
-                        categories = ",".join([t.term for t in entry.tags]) if getattr(entry, "tags", None) else None
-                    except Exception:
-                        categories = None
-
                     article = Article(
                         guid=guid,
                         title=getattr(entry, "title", None) or "",
                         link=getattr(entry, "link", None) or "",
                         description=getattr(entry, "description", None) or getattr(entry, "summary", None),
                         author=getattr(entry, "author", None),
-                        categories=categories,
                         pub_date=parse_pub_date(entry),
                         image_url=get_image_url(entry),
                         outlet_id=outlet.id,
