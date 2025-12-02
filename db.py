@@ -71,6 +71,7 @@ class Article(db.Model):
     description = db.Column(db.Text)
     author = db.Column(db.String(256))
     pub_date = db.Column(db.DateTime)
+    image_url = db.Column(db.String(512))
     outlet_id = db.Column(db.Integer, db.ForeignKey('outlet.id'), nullable=False)
 
     def to_dict(self):
@@ -82,6 +83,7 @@ class Article(db.Model):
             "description": self.description,
             "author": self.author,
             "pub_date": self.pub_date.isoformat() if self.pub_date else None,
+            "image_url": self.image_url,
             "outlet": {
                 "id": self.outlet.id,
                 "name": self.outlet.name,
