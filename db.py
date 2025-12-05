@@ -6,7 +6,11 @@ from datetime import datetime
 import re
 import html
 import requests
+import ssl
+import urllib.request
 from bs4 import BeautifulSoup
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 db = SQLAlchemy()
 
