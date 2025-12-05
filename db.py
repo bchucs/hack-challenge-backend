@@ -1,18 +1,14 @@
-from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from apscheduler.schedulers.background import BackgroundScheduler
+from werkzeug.security import generate_password_hash, check_password_hash
 import feedparser
 import time
 from datetime import datetime
-import atexit
 import re
 import html
+import requests
+from bs4 import BeautifulSoup
 
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///articles.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-db = SQLAlchemy(app)
+db = SQLAlchemy()
 
 # Helper functions
 def parse_pub_date(entry):
@@ -50,12 +46,89 @@ def strip_html(text):
     return text
 
 
+def scrape_article_content(url):
+    """Scrape article content from a URL and extract the main text."""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Remove script and style elements
+        for script in soup(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+            script.decompose()
+
+        # Try to find the main article content
+        # Common article container tags and classes
+        article_content = None
+
+        # Try different selectors in order of specificity
+        selectors = [
+            'article',
+            '[class*="article-content"]',
+            '[class*="article-body"]',
+            '[class*="post-content"]',
+            '[class*="entry-content"]',
+            'main',
+            '[role="main"]',
+        ]
+
+        for selector in selectors:
+            article_content = soup.select_one(selector)
+            if article_content:
+                break
+
+        # If no specific article container found, try to get all paragraphs
+        if not article_content:
+            article_content = soup.find('body')
+
+        if article_content:
+            # Extract text from paragraphs
+            paragraphs = article_content.find_all('p')
+            text = ' '.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+
+            text = re.sub(r'\s+', ' ', text).strip()
+
+            return text if text else None
+
+        return None
+    except Exception as e:
+        print(f"Error scraping article from {url}: {e}")
+        return None
+
+
+# Association table for many-to-many relationship between users and saved articles
+saved_articles = db.Table('saved_articles',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('article_id', db.Integer, db.ForeignKey('article.id'), primary_key=True)
+)
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    saved_articles = db.relationship('Article', backref='user', lazy='dynamic')
+    password_hash = db.Column(db.String(256), nullable=False)
+    saved_articles = db.relationship('Article', secondary=saved_articles, backref='saved_by_users', lazy='dynamic')
+
+    def set_password(self, password):
+        """Hash and set the user's password."""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """Check if the provided password matches the hash."""
+        return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email
+        }
+
 
 class Outlet(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -83,19 +156,22 @@ class Article(db.Model):
 
     title = db.Column(db.String(512), nullable=False)
     link = db.Column(db.String(512), nullable=False, unique=True)
-    description = db.Column(db.Text)
+    text = db.Column(db.Text)
     author = db.Column(db.String(256))
     pub_date = db.Column(db.DateTime)
     image_url = db.Column(db.String(512))
     outlet_id = db.Column(db.Integer, db.ForeignKey('outlet.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
-    def to_dict(self):
-        return {
+    def to_dict(self, user_id=None):
+        """
+        Convert article to dictionary.
+        If user_id is provided, includes whether the user has saved this article.
+        """
+        result = {
             "id": self.id,
             "title": self.title,
             "link": self.link,
-            "description": self.description,
+            "text": self.text,
             "author": self.author,
             "pub_date": self.pub_date.isoformat() if self.pub_date else None,
             "image_url": self.image_url,
@@ -105,8 +181,15 @@ class Article(db.Model):
             }
         }
 
+        if user_id is not None:
+            # Check if this article is saved by the user
+            user = User.query.get(user_id)
+            result["saved"] = user and self in user.saved_articles.all()
+
+        return result
+
 def initialize_outlets():
-    """Create the 4 news outlets if they don't exist."""
+    """Create the news outlets if they don't exist."""
     outlets_data = [
         {
             "name": "The Cornell Daily Sun",
@@ -368,46 +451,11 @@ def initialize_outlets():
             "description": "Cornell University's Official News Source: Weill Cornell Medicine-NY"
         },
         {
-            "name": "Cornell Chronicle Weill Cornell Medicine-Qatar",
-            "slug": "cornell-chronicle-weill-cornell-medicine-qatar",
-            "rss_feed": "https://news.cornell.edu/taxonomy/term/15/feed",
-            "url": "https://news.cornell.edu",
-            "description": "Cornell University's Official News Source: Weill Cornell Medicine-Qatar"
-        },
-        {
-            "name": "Cornell Chronicle Doha",
-            "slug": "cornell-chronicle-doha",
-            "rss_feed": "https://news.cornell.edu/taxonomy/term/61/feed",
-            "url": "https://news.cornell.edu",
-            "description": "Cornell University's Official News Source: Doha"
-        },
-        {
-            "name": "Cornell Chronicle Geneva",
-            "slug": "cornell-chronicle-geneva",
-            "rss_feed": "https://news.cornell.edu/taxonomy/term/62/feed",
-            "url": "https://news.cornell.edu",
-            "description": "Cornell University's Official News Source: Geneva"
-        },
-        {
             "name": "Cornell Chronicle Ithaca",
             "slug": "cornell-chronicle-ithaca",
             "rss_feed": "https://news.cornell.edu/taxonomy/term/63/feed",
             "url": "https://news.cornell.edu",
             "description": "Cornell University's Official News Source: Ithaca"
-        },
-        {
-            "name": "Cornell Chronicle New York City Location",
-            "slug": "cornell-chronicle-new-york-city-location",
-            "rss_feed": "https://news.cornell.edu/taxonomy/term/64/feed",
-            "url": "https://news.cornell.edu",
-            "description": "Cornell University's Official News Source: New York City"
-        },
-        {
-            "name": "Cornell Chronicle Washington, D.C.",
-            "slug": "cornell-chronicle-washington-dc",
-            "rss_feed": "https://news.cornell.edu/taxonomy/term/65/feed",
-            "url": "https://news.cornell.edu",
-            "description": "Cornell University's Official News Source: Washington, D.C."
         }
     ]
 
@@ -425,63 +473,42 @@ def initialize_outlets():
 
 def fetch_and_store_feeds():
     """Fetch all outlets' feeds and store new articles."""
-    with app.app_context():
-        outlets = Outlet.query.filter(Outlet.rss_feed != None).all()
+    outlets = Outlet.query.filter(Outlet.rss_feed != None).all()
 
-        for outlet in outlets:
-            try:
-                feed = feedparser.parse(outlet.rss_feed)
+    for outlet in outlets:
+        try:
+            feed = feedparser.parse(outlet.rss_feed)
 
-                for entry in feed.entries:
-                    link = getattr(entry, "link", None)
-                    if not link:
-                        continue
+            for entry in feed.entries:
+                link = getattr(entry, "link", None)
+                if not link:
+                    continue
 
-                    # Check if article already exists
-                    if Article.query.filter_by(link=link).first():
-                        continue
+                # Check if article already exists
+                if Article.query.filter_by(link=link).first():
+                    continue
 
-                    article = Article(
-                        title=getattr(entry, "title", None) or "",
-                        link=link,
-                        description=strip_html(getattr(entry, "description", None) or getattr(entry, "summary", None)),
-                        author=getattr(entry, "author", None),
-                        pub_date=parse_pub_date(entry),
-                        image_url=get_image_url(entry),
-                        outlet_id=outlet.id,
-                    )
+                # # Get text from RSS feed first
+                # text = strip_html(getattr(entry, "text", None) or getattr(entry, "summary", None))
 
-                    db.session.add(article)
+                # # If text is missing or empty, scrape the article content
+                # if not text:
+                #     print(f"No text in feed for {link}, scraping content...")
+                text = scrape_article_content(link)
 
-                db.session.commit()
-                print(f"Feed updated for outlet: {outlet.name}")
-            except Exception as e:
-                print(f"Error fetching feed for outlet {outlet.name} ({outlet.rss_feed}): {e}")
+                article = Article(
+                    title=getattr(entry, "title", None) or "",
+                    link=link,
+                    text=text,
+                    author=getattr(entry, "author", None),
+                    pub_date=parse_pub_date(entry),
+                    image_url=get_image_url(entry),
+                    outlet_id=outlet.id,
+                )
 
+                db.session.add(article)
 
-@app.route("/articles/")
-def list_articles():
-    """
-    Temporary endpoint. List all articles in the database.
-    """
-    articles = Article.query.order_by(Article.pub_date.desc()).all()
-    return jsonify([a.to_dict() for a in articles])
-
-
-def start_scheduler():
-    """
-    Start the background scheduler to fetch and store the RSS feed periodically.
-    """
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(fetch_and_store_feeds, "interval", minutes=15)
-    scheduler.start()
-    atexit.register(lambda: scheduler.shutdown(wait=False))
-
-
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-        initialize_outlets()
-        fetch_and_store_feeds()
-        start_scheduler()
-    app.run()
+            db.session.commit()
+            print(f"Feed updated for outlet: {outlet.name}")
+        except Exception as e:
+            print(f"Error fetching feed for outlet {outlet.name} ({outlet.rss_feed}): {e}")
