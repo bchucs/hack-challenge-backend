@@ -1,4 +1,4 @@
-# hack-challenge-backend
+# scope-backend
 
 colin park and boris chu
 
