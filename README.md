@@ -278,7 +278,7 @@ Save an article for the current user.
 
 ---
 
-### POST /articles/:article_id/unsave
+### DELETE /articles/:article_id/unsave
 Remove an article from the user's saved articles.
 
 **Authentication:** Required
