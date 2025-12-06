@@ -2,6 +2,8 @@
 
 colin park and boris chu
 
+## Docker Hub: https://hub.docker.com/r/bchucs/scope-backend
+
 ## Overview
 A Flask-based backend service that aggregates news articles from Cornell and Ithaca news outlets via RSS feeds and web scraping. Features include user authentication, article saving, and text-to-speech generation for articles.
 
