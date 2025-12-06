@@ -7,6 +7,14 @@ colin park and boris chu
 ## Overview
 A Flask-based backend service that aggregates news articles from Cornell and Ithaca news outlets via RSS feeds and web scraping. Features include user authentication, article saving, and text-to-speech generation for articles.
 
+## News Sources
+
+The application aggregates news from:
+- The Cornell Daily Sun
+- 14850 Magazine
+- The Ithaca Voice
+- Cornell Chronicle (40+ different categories and colleges)
+
 ## Features
 - Automated RSS feed aggregation from 40+ Cornell and local news sources
 - Web scraping for full article content
@@ -27,10 +35,9 @@ A Flask-based backend service that aggregates news articles from Cornell and Ith
 **News Aggregation:**
 - feedparser 6.0.11 - RSS/Atom feed parsing
 - BeautifulSoup4 4.12.3 - HTML parsing and web scraping
-- requests 2.32.3 - HTTP library for fetching article content
 
 **Audio Generation:**
-- gTTS 2.5.0 - Google Text-to-Speech API for converting article text to MP3 audio files
+- gTTS 2.5.0 - Google Text-to-Speech library for converting article text to MP3 audio files
 
 **Background Processing:**
 - APScheduler 3.10.4 - Background scheduler for periodic RSS feed updates (runs every 15 minutes)
@@ -92,7 +99,7 @@ A Flask-based backend service that aggregates news articles from Cornell and Ith
 - Audio files generated on-demand via POST `/articles/:id/generate-audio`
 - Uses Google's gTTS API (no API key required)
 - MP3 files stored in `audios/` directory
-- Filenames based on article ID (e.g., `1.mp3`, `2.mp3`)
+- Filenames based on article ID (e.g. `1.mp3`, `2.mp3`)
 - Audio files served statically via `/audios/:filename` route
 
 **Background Scheduler:**
@@ -100,13 +107,6 @@ A Flask-based backend service that aggregates news articles from Cornell and Ith
 - Automatically fetches new articles from all 40+ RSS feeds
 - Deduplicates articles by checking if `link` already exists in database
 - Gracefully handles feed parsing errors with try/except blocks
-
-**Deployment:**
-- Dockerized application using Python 3.11 slim image
-- Docker Hub image: `bchucs/scope-backend`
-- Exposes port 5000
-- Automatically creates `audios/` and `flask_session/` directories on startup
-- Database and outlets initialized on first run
 
 ## API Specification
 
@@ -447,13 +447,3 @@ The server will start on `http://localhost:5000` and will:
 - Create news outlet entries
 - Fetch initial articles from RSS feeds
 - Start a background scheduler to update feeds every 15 minutes
-
-## News Sources
-
-The application aggregates news from:
-- The Cornell Daily Sun
-- 14850 Magazine
-- The Ithaca Voice
-- Cornell Chronicle (40+ different categories and colleges)
-
-Articles are fetched via RSS feeds and full content is obtained through web scraping.
