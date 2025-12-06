@@ -1,6 +1,8 @@
 # scope-backend
 
-colin park and boris chu
+## Colin Park and Boris Chu
+
+## Frontend: https://github.com/Techno3d/hack-challenge-frontend
 
 ## Docker Hub: https://hub.docker.com/r/bchucs/scope-backend
 
