@@ -376,7 +376,9 @@ Get the currently authenticated user's information.
 
 ---
 
-## Installation
+## Installation & Deployment
+
+### Local Development (Python)
 
 1. Clone the repository
 2. Install dependencies:
@@ -394,6 +396,108 @@ The server will start on `http://localhost:5000` and will:
 - Create news outlet entries
 - Fetch initial articles from RSS feeds
 - Start a background scheduler to update feeds every 15 minutes
+
+### Docker Deployment
+
+#### Build and Run with Docker
+
+```bash
+# Build the Docker image
+docker build -t hack-challenge-backend .
+
+# Run the container
+docker run -p 5000:5000 hack-challenge-backend
+```
+
+#### Using Docker Compose
+
+```bash
+# Start the application
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the application
+docker-compose down
+```
+
+The Docker setup includes:
+- Persistent volumes for database, audio files, and session data
+- Automatic restarts
+- Port mapping to 5000
+
+### Cloud Deployment Options
+
+#### Option 1: Render (Recommended for Free Tier)
+
+1. Push your code to GitHub
+2. Go to [Render Dashboard](https://dashboard.render.com/)
+3. Click "New +" → "Web Service"
+4. Connect your GitHub repository
+5. Render will automatically detect the `render.yaml` configuration
+6. Click "Create Web Service"
+
+The app will be deployed and accessible at `https://your-app-name.onrender.com`
+
+**Note:** Free tier may spin down after inactivity. First request after inactivity may take 30-60 seconds.
+
+#### Option 2: Railway
+
+1. Push your code to GitHub
+2. Go to [Railway](https://railway.app/)
+3. Click "New Project" → "Deploy from GitHub repo"
+4. Select your repository
+5. Railway will auto-detect Docker and deploy
+
+#### Option 3: Fly.io
+
+```bash
+# Install flyctl
+curl -L https://fly.io/install.sh | sh
+
+# Login
+flyctl auth login
+
+# Launch app
+flyctl launch
+
+# Deploy
+flyctl deploy
+```
+
+#### Option 4: Google Cloud Run
+
+```bash
+# Build and push to Google Container Registry
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/hack-challenge-backend
+
+# Deploy to Cloud Run
+gcloud run deploy hack-challenge-backend \
+  --image gcr.io/YOUR_PROJECT_ID/hack-challenge-backend \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated
+```
+
+#### Option 5: AWS (EC2 or ECS)
+
+For EC2:
+```bash
+# SSH into your EC2 instance
+ssh -i your-key.pem ec2-user@your-instance-ip
+
+# Install Docker
+sudo yum update -y
+sudo yum install docker -y
+sudo service docker start
+
+# Clone and run
+git clone your-repo-url
+cd hack-challenge-backend
+sudo docker build -t hack-challenge-backend .
+sudo docker run -d -p 80:5000 hack-challenge-backend
+```
 
 ---
 

@@ -233,4 +233,4 @@ if __name__ == "__main__":
         initialize_outlets()
         fetch_and_store_feeds()
         start_scheduler()
-    app.run()
+    app.run(host='0.0.0.0', port=5000, debug=False)
