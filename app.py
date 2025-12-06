@@ -1,8 +1,9 @@
-from flask import Flask, jsonify, request, session
+from flask import Flask, jsonify, request, session, send_from_directory
 from flask_session import Session
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-from db import db, User, Article, Outlet, initialize_outlets, fetch_and_store_feeds
+import os
+from db import db, User, Article, Outlet, initialize_outlets, fetch_and_store_feeds, generate_article_tts
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///articles.db"
@@ -106,6 +107,40 @@ def unsave_article(article_id):
     db.session.commit()
 
     return jsonify({"message": "Article unsaved successfully"}), 200
+
+
+@app.route("/articles/<int:article_id>/generate-audio", methods=["POST"])
+def generate_audio(article_id):
+    """Generate text-to-speech audio for an article."""
+    article = Article.query.get(article_id)
+
+    if not article:
+        return jsonify({"error": "Article not found"}), 404
+
+    if not article.text:
+        return jsonify({"error": "Article has no text content"}), 400
+
+    # Check if audio already exists
+    if article.audio_file and os.path.exists(os.path.join('audios', article.audio_file)):
+        return jsonify({"message": "Audio already exists", "audio_file": article.audio_file}), 200
+
+    # Generate TTS
+    filename = generate_article_tts(article.id, article.text)
+
+    if not filename:
+        return jsonify({"error": "Failed to generate audio"}), 500
+
+    # Update article with audio file path
+    article.audio_file = filename
+    db.session.commit()
+
+    return jsonify({"message": "Audio generated successfully", "audio_file": filename}), 201
+
+
+@app.route("/audios/<path:filename>")
+def serve_audio(filename):
+    """Serve audio files from the audios directory."""
+    return send_from_directory('audios', filename)
 
 
 # Authentication endpoints

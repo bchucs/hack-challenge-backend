@@ -9,6 +9,8 @@ import requests
 import ssl
 import urllib.request
 from bs4 import BeautifulSoup
+from gtts import gTTS
+import os
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -104,6 +106,31 @@ def scrape_article_content(url):
         return None
 
 
+def generate_article_tts(article_id, text):
+    """Generate text-to-speech audio for an article and save it to the audios folder."""
+    if not text or not text.strip():
+        print(f"No text available for article {article_id}")
+        return None
+
+    try:
+        # Create audios directory if it doesn't exist
+        os.makedirs('audios', exist_ok=True)
+
+        # Generate filename
+        filename = f"{article_id}.mp3"
+        filepath = os.path.join('audios', filename)
+
+        # Generate TTS
+        tts = gTTS(text=text, lang='en', slow=False)
+        tts.save(filepath)
+
+        print(f"Generated TTS for article {article_id}: {filepath}")
+        return filename
+    except Exception as e:
+        print(f"Error generating TTS for article {article_id}: {e}")
+        return None
+
+
 # Association table for many-to-many relationship between users and saved articles
 saved_articles = db.Table('saved_articles',
     db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
@@ -164,6 +191,7 @@ class Article(db.Model):
     author = db.Column(db.String(256))
     pub_date = db.Column(db.DateTime)
     image_url = db.Column(db.String(512))
+    audio_file = db.Column(db.String(512))
     outlet_id = db.Column(db.Integer, db.ForeignKey('outlet.id'), nullable=False)
 
     def to_dict(self, user_id=None):
@@ -179,6 +207,7 @@ class Article(db.Model):
             "author": self.author,
             "pub_date": self.pub_date.isoformat() if self.pub_date else None,
             "image_url": self.image_url,
+            "audio_file": self.audio_file,
             "outlet": {
                 "id": self.outlet.id,
                 "name": self.outlet.name,
