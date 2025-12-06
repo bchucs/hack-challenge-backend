@@ -15,6 +15,11 @@ app.config["SESSION_TYPE"] = "filesystem"
 db.init_app(app)
 Session(app)
 
+@app.route("/")
+def index():
+    """Welcome endpoint."""
+    return "Scope Backend: https://github.com/bchucs/scope-backend", 200 
+
 
 # Article endpoints
 @app.route("/articles")
@@ -43,6 +48,46 @@ def get_top_articles(top_k):
     """Get the top K most recent articles."""
     user_id = session.get('user_id')
     articles = Article.query.order_by(Article.pub_date.desc()).limit(top_k).all()
+    return jsonify([a.to_dict(user_id=user_id) for a in articles]), 200
+
+@app.route("/outlets")
+def list_outlets():
+    """List all parent news outlets (outlets without a parent)."""
+    outlets = Outlet.query.filter_by(parent_outlet_id=None).all()
+    return jsonify([o.to_dict() for o in outlets]), 200
+
+@app.route("/articles/outlet/<int:outlet_id>")
+def get_articles_by_outlet(outlet_id):
+    """Get articles from a specific outlet and all its child outlets."""
+    user_id = session.get('user_id')
+    outlet = Outlet.query.get(outlet_id)
+
+    if not outlet:
+        return jsonify({"error": "Outlet not found"}), 404
+
+    # Get outlet IDs: the outlet itself and all its children
+    outlet_ids = [outlet.id]
+    if outlet.children:
+        outlet_ids.extend([child.id for child in outlet.children])
+
+    articles = Article.query.filter(Article.outlet_id.in_(outlet_ids)).order_by(Article.pub_date.desc()).all()
+    return jsonify([a.to_dict(user_id=user_id) for a in articles]), 200
+
+@app.route("/articles/outlet/<int:outlet_id>/top/<int:top_k>")
+def get_top_articles_by_outlet(outlet_id, top_k):
+    """Get the top K most recent articles from a specific outlet and all its child outlets."""
+    user_id = session.get('user_id')
+    outlet = Outlet.query.get(outlet_id)
+
+    if not outlet:
+        return jsonify({"error": "Outlet not found"}), 404
+
+    # Get outlet IDs: the outlet itself and all its children
+    outlet_ids = [outlet.id]
+    if outlet.children:
+        outlet_ids.extend([child.id for child in outlet.children])
+
+    articles = Article.query.filter(Article.outlet_id.in_(outlet_ids)).order_by(Article.pub_date.desc()).limit(top_k).all()
     return jsonify([a.to_dict(user_id=user_id) for a in articles]), 200
 
 
@@ -86,7 +131,7 @@ def save_article(article_id):
     return jsonify({"message": "Article saved successfully"}), 200
 
 
-@app.route("/articles/<int:article_id>/unsave", methods=["POST"])
+@app.route("/articles/<int:article_id>/unsave", methods=["DELETE"])
 def unsave_article(article_id):
     """Unsave an article for the current user."""
     user_id = session.get('user_id')

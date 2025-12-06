@@ -169,7 +169,9 @@ class Outlet(db.Model):
     url = db.Column(db.String(512))
     description = db.Column(db.Text)
     logo_url = db.Column(db.String(512))
+    parent_outlet_id = db.Column(db.Integer, db.ForeignKey('outlet.id'), nullable=True)
     articles = db.relationship('Article', backref='outlet', lazy=True)
+    children = db.relationship('Outlet', backref=db.backref('parent', remote_side=[id]), lazy=True)
 
     def to_dict(self):
         return {
@@ -223,6 +225,20 @@ class Article(db.Model):
 
 def initialize_outlets():
     """Create the news outlets if they don't exist."""
+    # First, create the parent Cornell Chronicle outlet
+    parent_chronicle = Outlet.query.filter_by(slug="cornell-chronicle").first()
+    if not parent_chronicle:
+        parent_chronicle = Outlet(
+            name="Cornell Chronicle",
+            slug="cornell-chronicle",
+            rss_feed=None,
+            url="https://news.cornell.edu",
+            description="Cornell University's Official News Source"
+        )
+        db.session.add(parent_chronicle)
+        db.session.commit()
+        print("Created parent outlet: Cornell Chronicle")
+
     outlets_data = [
         {
             "name": "The Cornell Daily Sun",
@@ -494,12 +510,23 @@ def initialize_outlets():
 
     for outlet_data in outlets_data:
         existing = Outlet.query.filter_by(slug=outlet_data["slug"]).first()
+
+        # Determine if this outlet should be a child of Cornell Chronicle
+        is_chronicle_child = outlet_data["name"].startswith("Cornell Chronicle") and outlet_data["slug"] != "cornell-chronicle"
+
         if not existing:
+            if is_chronicle_child:
+                outlet_data["parent_outlet_id"] = parent_chronicle.id
             outlet = Outlet(**outlet_data)
             db.session.add(outlet)
             print(f"Created outlet: {outlet_data['name']}")
         else:
-            print(f"Outlet already exists: {outlet_data['name']}")
+            # Update existing outlet's parent if it's a Chronicle child
+            if is_chronicle_child and existing.parent_outlet_id != parent_chronicle.id:
+                existing.parent_outlet_id = parent_chronicle.id
+                print(f"Updated parent for outlet: {outlet_data['name']}")
+            else:
+                print(f"Outlet already exists: {outlet_data['name']}")
 
     db.session.commit()
 

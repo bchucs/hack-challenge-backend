@@ -77,6 +77,9 @@ The application aggregates news from:
 - `url` (String(512)) - Outlet website URL
 - `description` (Text) - Outlet description
 - `logo_url` (String(512)) - Logo image URL
+- `parent_outlet_id` (Integer, Foreign Key, Nullable) - Reference to parent Outlet (for hierarchical grouping)
+- `children` (Relationship) - Child outlets (e.g., Cornell Chronicle has 40+ category feeds as children)
+- `parent` (Relationship) - Parent outlet reference
 
 **Association Table:**
 - `saved_articles` - Many-to-many join table linking Users and Articles
@@ -107,6 +110,12 @@ The application aggregates news from:
 - Automatically fetches new articles from all 40+ RSS feeds
 - Deduplicates articles by checking if `link` already exists in database
 - Gracefully handles feed parsing errors with try/except blocks
+
+**Outlet Hierarchy:**
+- Cornell Chronicle is organized as a parent outlet with 40+ child outlets (one for each category/college)
+- The `/outlets` endpoint returns only parent outlets (Cornell Sun, 14850, Ithaca Voice, and Cornell Chronicle)
+- When fetching articles by outlet, the API automatically includes articles from all child outlets
+- For example, fetching articles from "Cornell Chronicle" returns articles from all 40+ Chronicle category feeds combined
 
 ## API Specification
 
@@ -424,6 +433,113 @@ Get the currently authenticated user's information.
 - `401 Unauthorized`: Not authenticated
 - `404 Not Found`: User not found
 
+---
+
+## Outlet Endpoints
+
+### GET /outlets
+List all parent news outlets (outlets without a parent).
+
+**Note:** This endpoint only returns top-level outlets. Cornell Chronicle is returned as a single outlet, with all its category feeds (40+) as hidden child outlets.
+
+**Authentication:** Not required
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": 1,
+    "name": "The Cornell Daily Sun",
+    "slug": "cornell-sun",
+    "rss_feed": "https://www.cornellsun.com/plugin/feeds/all.xml",
+    "url": "https://www.cornellsun.com",
+    "description": "Cornell University's independent student newspaper",
+    "logo_url": null
+  },
+  {
+    "id": 4,
+    "name": "Cornell Chronicle",
+    "slug": "cornell-chronicle",
+    "rss_feed": null,
+    "url": "https://news.cornell.edu",
+    "description": "Cornell University's Official News Source",
+    "logo_url": null
+  }
+]
+```
+
+---
+
+### GET /articles/outlet/:outlet_id
+Get articles from a specific outlet and all its child outlets.
+
+**Note:** When querying a parent outlet (e.g., Cornell Chronicle), this automatically includes articles from all child outlets.
+
+**Parameters:**
+- `outlet_id` (path): The outlet ID
+
+**Authentication:** Optional (if logged in, includes saved status)
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": 10,
+    "title": "Cornell Research Article",
+    "link": "https://news.cornell.edu/stories/2025/12/article",
+    "text": "Article content...",
+    "author": "Staff",
+    "pub_date": "2025-12-05T09:00:00",
+    "image_url": "https://news.cornell.edu/image.jpg",
+    "audio_file": null,
+    "outlet": {
+      "id": 5,
+      "name": "Cornell Chronicle Architecture & Design"
+    },
+    "saved": false
+  }
+]
+```
+
+**Errors:**
+- `404 Not Found`: Outlet not found
+
+---
+
+### GET /articles/outlet/:outlet_id/top/:top_k
+Get the top K most recent articles from a specific outlet and all its child outlets.
+
+**Note:** When querying a parent outlet (e.g., Cornell Chronicle), this automatically includes articles from all child outlets.
+
+**Parameters:**
+- `outlet_id` (path): The outlet ID
+- `top_k` (path): Number of articles to retrieve
+
+**Authentication:** Optional (if logged in, includes saved status)
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": 15,
+    "title": "Latest Cornell News",
+    "link": "https://news.cornell.edu/stories/2025/12/latest",
+    "text": "Article content...",
+    "author": "Staff",
+    "pub_date": "2025-12-06T10:00:00",
+    "image_url": "https://news.cornell.edu/latest.jpg",
+    "audio_file": null,
+    "outlet": {
+      "id": 8,
+      "name": "Cornell Chronicle Computing & Information Sciences"
+    },
+    "saved": false
+  }
+]
+```
+
+**Errors:**
+- `404 Not Found`: Outlet not found
 
 ---
 
