@@ -15,6 +15,99 @@ A Flask-based backend service that aggregates news articles from Cornell and Ith
 - Text-to-speech audio generation for articles
 - Background scheduler for automatic feed updates every 15 minutes
 
+## Technical Implementation
+
+### Technology Stack & Third-Party Libraries
+
+**Backend Framework:**
+- Flask 3.1.2 - Python web framework
+- Flask-SQLAlchemy 3.1.1 - ORM for database interactions
+- Flask-Session 0.8.0 - Server-side session management with filesystem storage
+
+**News Aggregation:**
+- feedparser 6.0.11 - RSS/Atom feed parsing
+- BeautifulSoup4 4.12.3 - HTML parsing and web scraping
+- requests 2.32.3 - HTTP library for fetching article content
+
+**Audio Generation:**
+- gTTS 2.5.0 - Google Text-to-Speech API for converting article text to MP3 audio files
+
+**Background Processing:**
+- APScheduler 3.10.4 - Background scheduler for periodic RSS feed updates (runs every 15 minutes)
+
+**Security:**
+- Werkzeug 3.1.3 - Password hashing using `generate_password_hash` and `check_password_hash`
+
+**Database:**
+- SQLite - File-based relational database (`articles.db`)
+- SQLAlchemy 2.0.44 - Python SQL toolkit and ORM
+
+### Database Schema
+
+**User Model:**
+- `id` (Integer, Primary Key) - Unique user identifier
+- `username` (String(80), Unique, Required) - User's username
+- `email` (String(120), Unique, Required) - User's email address
+- `password_hash` (String(256), Required) - Bcrypt-hashed password
+- `saved_articles` (Relationship) - Many-to-many relationship with Article model
+
+**Article Model:**
+- `id` (Integer, Primary Key) - Unique article identifier
+- `title` (String(512), Required) - Article headline
+- `link` (String(512), Unique, Required) - Original article URL
+- `text` (Text) - Full article content (scraped from source)
+- `author` (String(256)) - Article author name
+- `pub_date` (DateTime) - Publication date and time
+- `image_url` (String(512)) - Featured image URL
+- `audio_file` (String(512)) - Generated MP3 filename (e.g., "1.mp3")
+- `outlet_id` (Integer, Foreign Key) - Reference to Outlet model
+
+**Outlet Model:**
+- `id` (Integer, Primary Key) - Unique outlet identifier
+- `name` (String(256), Unique, Required) - News outlet name
+- `slug` (String(128), Unique, Required) - URL-friendly identifier
+- `rss_feed` (String(512)) - RSS feed URL
+- `url` (String(512)) - Outlet website URL
+- `description` (Text) - Outlet description
+- `logo_url` (String(512)) - Logo image URL
+
+**Association Table:**
+- `saved_articles` - Many-to-many join table linking Users and Articles
+
+### Implementation Details
+
+**Authentication:**
+- Session-based authentication using Flask-Session with filesystem storage
+- Passwords secured with Werkzeug's password hashing (bcrypt-based)
+- Session data stored in `flask_session/` directory
+- User sessions persist across server restarts
+
+**Web Scraping Strategy:**
+- Primary content extraction from RSS feeds using feedparser
+- Full article text obtained via web scraping with BeautifulSoup4
+- Removes navigation, headers, footers, scripts, and style elements before extraction
+- User-Agent spoofing to avoid bot detection
+
+**Text-to-Speech:**
+- Audio files generated on-demand via POST `/articles/:id/generate-audio`
+- Uses Google's gTTS API (no API key required)
+- MP3 files stored in `audios/` directory
+- Filenames based on article ID (e.g., `1.mp3`, `2.mp3`)
+- Audio files served statically via `/audios/:filename` route
+
+**Background Scheduler:**
+- APScheduler runs `fetch_and_store_feeds()` every 15 minutes
+- Automatically fetches new articles from all 40+ RSS feeds
+- Deduplicates articles by checking if `link` already exists in database
+- Gracefully handles feed parsing errors with try/except blocks
+
+**Deployment:**
+- Dockerized application using Python 3.11 slim image
+- Docker Hub image: `bchucs/scope-backend`
+- Exposes port 5000
+- Automatically creates `audios/` and `flask_session/` directories on startup
+- Database and outlets initialized on first run
+
 ## API Specification
 
 ### Base URL
@@ -331,50 +424,6 @@ Get the currently authenticated user's information.
 - `401 Unauthorized`: Not authenticated
 - `404 Not Found`: User not found
 
----
-
-## Data Models
-
-### User
-```json
-{
-  "id": 1,
-  "username": "john_doe",
-  "email": "john@example.com"
-}
-```
-
-### Article
-```json
-{
-  "id": 1,
-  "title": "Article Title",
-  "link": "https://example.com/article",
-  "text": "Full article text content...",
-  "author": "Author Name",
-  "pub_date": "2025-12-05T10:30:00",
-  "image_url": "https://example.com/image.jpg",
-  "audio_file": "1.mp3",
-  "outlet": {
-    "id": 1,
-    "name": "The Cornell Daily Sun"
-  },
-  "saved": false
-}
-```
-
-### Outlet
-```json
-{
-  "id": 1,
-  "name": "The Cornell Daily Sun",
-  "slug": "cornell-sun",
-  "rss_feed": "https://www.cornellsun.com/plugin/feeds/all.xml",
-  "url": "https://www.cornellsun.com",
-  "description": "Cornell University's independent student newspaper",
-  "logo_url": null
-}
-```
 
 ---
 
